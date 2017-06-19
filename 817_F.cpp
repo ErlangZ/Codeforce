@@ -4,8 +4,9 @@
 #include <iostream>
 #include <cstdint>
 #include <algorithm>
+
 const int SIZE = 1e6;
-const uint64_t MAX = 1l << 63;
+const uint64_t MAX = 1l << 60;
 const uint64_t MIN = 1l;
 
 enum Color {
@@ -17,13 +18,20 @@ enum Color {
 struct Interval {
   uint64_t lower;
   uint64_t upper;
-  uint64_t min;
+  uint64_t mex;
   Color color;
 };
 
 Interval intervals[SIZE];
+int64_t left_index[SIZE];
+int64_t right_index[SIZE];
+int64_t size;
+
 void Change(int index, Color color, uint64_t lower, uint64_t upper) {
-  if (intervals[index].lower == lower && intervals[index].upper == upper) {
+  if (lower > upper) return;
+
+  if (intervals[index].color != kUnused &&
+      intervals[index].lower == lower && intervals[index].upper == upper) {
     if (color == kAdded || color == kAdded) {
       intervals[index].color = color;
     } else if (intervals[index].color == kAdded) {
@@ -32,51 +40,65 @@ void Change(int index, Color color, uint64_t lower, uint64_t upper) {
       intervals[index].color = kAdded;
     }
 
-    if (intervals[index].color == kAdded) {
-      intervals[index].min = lower;
+    if (intervals[index].color == kRemoved) {
+      intervals[index].mex = lower;
     } else {
-      intervals[index].min = MAX;
+      intervals[index].mex = MAX;
     }
     return;
   }
 
   uint64_t mid = (intervals[index].lower + intervals[index].upper) / 2;
-  // Split first.
-  if (intervals[2 * index].color == kUnused && intervals[2 * index + 1].color == kUnused) {
-    intervals[2 * index].color = intervals[index].color;
-    intervals[2 * index + 1].color = intervals[index].color;
-
-    intervals[2 * index].lower = intervals[index].lower;
-    intervals[2 * index].upper = mid;
-    if (intervals[index].color == kAdded) {
-      intervals[2 * index].min = intervals[2 * index].lower;
+  // Leaf node, Split first.
+  if (intervals[index].color != kUnused) {
+    left_index[index] = size + 1;
+    intervals[left_index[index]].color = intervals[index].color;
+    intervals[left_index[index]].lower = intervals[index].lower;
+    intervals[left_index[index]].upper = mid;
+    if (intervals[index].color == kRemoved) {
+      intervals[left_index[index]].mex = intervals[left_index[index]].lower;
     } else {
-      intervals[2 * index].min = MAX;
+      intervals[left_index[index]].mex = MAX;
     }
+    left_index[left_index[index]] = left_index[index];
+    right_index[left_index[index]] = left_index[index];
 
-    intervals[2 * index + 1].lower = mid;
-    intervals[2 * index].upper = intervals[index].upper;
-
-    if (intervals[index].color == kAdded) {
-      intervals[2 * index + 1].min = intervals[2 * index + 1].lower;
+    right_index[index] = size + 2;
+    intervals[right_index[index]].color = intervals[index].color;
+    intervals[right_index[index]].lower = mid;
+    intervals[right_index[index]].upper = intervals[index].upper;
+    if (intervals[index].color == kRemoved) {
+      intervals[right_index[index]].mex = intervals[right_index[index]].lower;
     } else {
-      intervals[2 * index + 1].min = MAX;
+      intervals[right_index[index]].mex = MAX;
     }
+    left_index[right_index[index]] = right_index[index];
+    right_index[right_index[index]] = right_index[index];
+
+    intervals[index].color = kUnused;
+    size += 2;
   }
 
   if (mid <= lower) {
-    Change(2 * index + 1, color, lower, upper);
+    Change(right_index[index], color, lower, upper);
   } else if (mid >= upper) {
-    Change(2 * index, color, lower, upper);
+    Change(left_index[index], color, lower, upper);
   } else {
-    Change(2 * index, color, lower, mid);
-    Change(2 * index + 1, color, mid, upper);
+    Change(left_index[index], color, lower, mid);
+    Change(right_index[index], color, mid, upper);
   }
 
-  if (intervals[index].color == kAdded) {
-    intervals[index].min = std::min(intervals[2 * index].min, intervals[2 * index + 1].min);
-  } else {
-    intervals[index].min = MAX;
+  switch (intervals[index].color) {
+    case kUnused:
+      intervals[index].mex = std::min(intervals[left_index[index]].mex,
+                                      intervals[right_index[index]].mex);
+      break;
+    case kAdded:
+      intervals[index].mex = MAX;
+      break;
+    case kRemoved:
+      intervals[index].mex = intervals[index].lower;
+      break;
   }
 }
 
@@ -95,7 +117,11 @@ void Invert(int index, uint64_t lower, uint64_t upper) {
 int main() {
   intervals[0].lower = MIN;
   intervals[0].upper = MAX;
-  intervals[0].min = MAX;
+  intervals[0].mex = 1;
+  intervals[0].color = kRemoved;
+  left_index[0] = 0;
+  right_index[0] = 0;
+  size = 1;
 
   int n = 0;
   std::cin >> n;
@@ -105,7 +131,7 @@ int main() {
     if (t == 1) Add(0, l, r);
     if (t == 2) Remove(0, l, r);
     if (t == 3) Invert(0, l, r);
-    std::cout << intervals[0].min << std::endl;
+    std::cout << intervals[0].mex << std::endl;
   }
   return 0;
 }
