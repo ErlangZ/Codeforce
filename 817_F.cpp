@@ -27,12 +27,14 @@ int64_t left_index[SIZE];
 int64_t right_index[SIZE];
 int64_t size;
 
+// must be [lower, upper), incase [a, b] [b, b+1], we don't know b belongs to which.
 void Change(int index, Color color, uint64_t lower, uint64_t upper) {
-  if (lower > upper) return;
+  if (lower >= upper) return;
 
-  if (intervals[index].color != kUnused &&
-      intervals[index].lower == lower && intervals[index].upper == upper) {
-    if (color == kAdded || color == kAdded) {
+  if ((intervals[index].upper - intervals[index].lower == 1) ||
+      (intervals[index].color != kUnused &&
+      intervals[index].lower == lower && intervals[index].upper == upper)) {
+    if (color == kAdded || color == kRemoved) {
       intervals[index].color = color;
     } else if (intervals[index].color == kAdded) {
       intervals[index].color = kRemoved;
@@ -48,9 +50,10 @@ void Change(int index, Color color, uint64_t lower, uint64_t upper) {
     return;
   }
 
+  // Warning: mid may be equal to lower/upper, then dead loop.
   uint64_t mid = (intervals[index].lower + intervals[index].upper) / 2;
-  // Leaf node, Split first.
-  if (intervals[index].color != kUnused) {
+  // color != kUnused is non leaf node, split it first.
+  if (intervals[index].color != kUnused && mid > intervals[index].lower) {
     left_index[index] = size + 1;
     intervals[left_index[index]].color = intervals[index].color;
     intervals[left_index[index]].lower = intervals[index].lower;
@@ -60,8 +63,6 @@ void Change(int index, Color color, uint64_t lower, uint64_t upper) {
     } else {
       intervals[left_index[index]].mex = MAX;
     }
-    left_index[left_index[index]] = left_index[index];
-    right_index[left_index[index]] = left_index[index];
 
     right_index[index] = size + 2;
     intervals[right_index[index]].color = intervals[index].color;
@@ -72,14 +73,12 @@ void Change(int index, Color color, uint64_t lower, uint64_t upper) {
     } else {
       intervals[right_index[index]].mex = MAX;
     }
-    left_index[right_index[index]] = right_index[index];
-    right_index[right_index[index]] = right_index[index];
 
     intervals[index].color = kUnused;
     size += 2;
   }
 
-  if (mid <= lower) {
+  if (mid < lower) {
     Change(right_index[index], color, lower, upper);
   } else if (mid >= upper) {
     Change(left_index[index], color, lower, upper);
@@ -119,8 +118,6 @@ int main() {
   intervals[0].upper = MAX;
   intervals[0].mex = 1;
   intervals[0].color = kRemoved;
-  left_index[0] = 0;
-  right_index[0] = 0;
   size = 1;
 
   int n = 0;
@@ -128,9 +125,9 @@ int main() {
   for (int i = 0; i < n; ++i) {
     uint64_t t, l, r;
     std::cin >> t >> l >> r;
-    if (t == 1) Add(0, l, r);
-    if (t == 2) Remove(0, l, r);
-    if (t == 3) Invert(0, l, r);
+    if (t == 1) Add(0, l, r+1);
+    if (t == 2) Remove(0, l, r+1);
+    if (t == 3) Invert(0, l, r+1);
     std::cout << intervals[0].mex << std::endl;
   }
   return 0;
