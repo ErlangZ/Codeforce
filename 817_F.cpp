@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <algorithm>
 
-const int SIZE = 1e6;
-const uint64_t MAX = 1l << 60;
+const int SIZE = 5000000;
+const uint64_t MAX = 1152921504606846975ull;
 const uint64_t MIN = 1l;
 
 enum Color {
@@ -30,6 +30,7 @@ int64_t size;
 // must be [lower, upper), incase [a, b] [b, b+1], we don't know b belongs to which.
 void Change(int index, Color color, uint64_t lower, uint64_t upper) {
   if (lower >= upper) return;
+  if (color != kUnused && color == intervals[index].color == color) return;
 
   if ((intervals[index].upper - intervals[index].lower == 1) ||
       (intervals[index].color != kUnused &&
@@ -51,7 +52,7 @@ void Change(int index, Color color, uint64_t lower, uint64_t upper) {
   }
 
   // Warning: mid may be equal to lower/upper, then dead loop.
-  uint64_t mid = (intervals[index].lower + intervals[index].upper) / 2;
+  uint64_t mid = (intervals[index].lower + intervals[index].upper) >> 1;
   // color != kUnused is non leaf node, split it first.
   if (intervals[index].color != kUnused && mid > intervals[index].lower) {
     left_index[index] = size + 1;
@@ -114,6 +115,8 @@ void Invert(int index, uint64_t lower, uint64_t upper) {
 }
 
 int main() {
+  std::cin.tie(0);
+  std::cin.sync_with_stdio(0);
   intervals[0].lower = MIN;
   intervals[0].upper = MAX;
   intervals[0].mex = 1;
