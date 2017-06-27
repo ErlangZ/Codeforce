@@ -1,61 +1,77 @@
 #include <algorithm>
+#include <cassert>
 #include <memory>
 #include <iostream>
 #include <vector>
-#include <utiltity>
 
 struct Interval {
-  int lower = 0;
-  int upper = 0;
-  bool DoOverlop(int point) const { return point >= lower && point <= upper; }
+  int begin = 0;
+  int end = 0;
+  int mid() const { return (begin + end) >> 1; }
+  int count = 0;
+  std::unique_ptr<Interval> left;
+  std::unique_ptr<Interval> right;
+
+  Interval(int b, int e, int c) : begin(b), end(e), count(c) {}
+  bool Contain(int b, int e) { return begin <= b && end >= e; }
+
+  void Split() {
+    assert(!left && !right);
+    assert(end - begin > 1);
+
+    const int mid = (begin + end) >> 1;
+    left = std::unique_ptr<Interval>(new Interval(begin, mid, count));
+    right = std::unique_ptr<Interval>(new Interval(mid, end, count));
+    count = -1;
+  }
 };
-bool operator<(const Interval& i1, const Interval& i2) {
-  return i1.lower < i2.lower || (i1.lower == i2.lower && i1.upper < i2.upper);
-}
 
-struct IntervalNode {
-  int center = 0;
-  int overlap_begin_index = 0;
-  int overlap_end_index = 0;
-  std::unique_ptr<IntervalNode> left;
-  std::unique_ptr<IntervalNode> right;
-};
+void Add(std::unique_ptr<Interval>& interval, int begin, int end) {
+  assert(interval->Contain(begin, end));
 
-void BuildTree(std::vector<Interval>& intervals, std::unique_ptr<IntervalNode>* root,
-               int begin_index, int end_index) {
-  if (begin_index >= end_index) return;
-
-  *root = std::unique_ptr<IntervalNode>();
-
-  int mid_index = (begin_index + end_index) / 2;
-  (*root)->center = intervals[mid_index].lower;
-
-  int left_end_index = 0;
-  int right_begin_index = 0;
-  for (int i = begin_index; i < end_index; i++) {
-    if (intervals[i].DoOverlop((*root)->center)) { // Add interval.
-      std::swap(intervals[i], intervals[right_begin_index]);
-      right_begin_index ++;
-    } else if ((*root)->center < intervals[i].lower) { // Add left
-      std::swap(intervals[i], intervals[left_end_index]);
-      std::swap(intervals[i], intervals[right_begin_index]);
-      right_begin_index++;
-      left_end_index++;
-    } else if ((*root)->center > intervals[i].upper) { // Add right
-      // Do nothing, just add i
+  if (begin >= end) return;
+  if (interval == nullptr) {
+    interval = std::unique_ptr<Interval>(new Interval(begin, end, 1));
+  } else if (interval->begin == begin && interval->end == end) {
+    if (interval->count >= 0) {
+      interval->count ++;
+    } else {
+      Add(interval->left, begin, interval->mid());
+      Add(interval->right, interval->mid(), end);
+    }
+  } else {
+    if (interval->count >= 0) {
+      interval->Split();
+    }
+    if (interval->mid() <= begin) {
+      Add(interval->right, begin, end);
+    } else if (interval->mid() >= end) {
+      Add(interval->left, begin, end);
+    } else {
+      Add(interval->left, begin, interval->mid());
+      Add(interval->right, interval->mid(), end);
     }
   }
-  (*root)->overlap_begin_index = left_end_index;
-  (*root)->overlap_end_index = right_begin_index;
-
-  BuildTree(intervals, &(*root)->left, begin_index, left_end_index);
-  BuildTree(intervals, &(*root)->right, right_begin_index, end_index);
 }
 
-int Find(std::vector<Interval>& intervals, IntervalNode& tree, const Interval& query, int limit) {
-  if (query.DoOverlop(tree.center)) {
-    for (int index = tree.overlap_begin_index; index < tree.overlap_end_index; index++) {
-
+int Find(std::unique_ptr<Interval>& tree, int begin, int end, int limit) {
+  if (!tree) return 0;
+  if (tree->count >= 0) {
+    if (tree->count < limit) {
+      return 0;
+    } else {
+      int r = std::min(end, tree->end) - std::max(begin, tree->begin);
+      return r >= 0 ? r : 0;
+    }
+  } else {
+    if (tree->mid() <= begin) {
+      return Find(tree->right, begin, end, limit);
+    } else if (tree->mid() >= end) {
+      return Find(tree->left, begin, end, limit);
+    } else {
+      int r1 = Find(tree->left, begin, tree->mid(), limit);
+      int r2 = Find(tree->right, tree->mid(), end, limit);
+      return r1 + r2;
     }
   }
 }
@@ -64,19 +80,16 @@ int main() {
   int n, k, q;
   std::cin >> n >> k >> q;
 
-  std::vector<Interval> intervals(n);
+  std::unique_ptr<Interval> tree(new Interval(1, 262144, 0));
   for (int i = 0; i < n; i++) {
-    std::cin >> intervals[i].lower >> intervals[i].upper;
+    int lower, upper;
+    std::cin >> lower >> upper;
+    Add(tree, lower, upper+1);
   }
-  std::sort(intervals.begin(), intervals.end());
-
-  std::unique_ptr<IntervalNode> tree;
-  BuildTree(intervals, &tree, 0, intervals.size());
-
   for (int i = 0; i < q; i++) {
-    Interval query;
-    std::cin >> query.lower >> query.upper;
-    std::cout << Find(intervals, *tree, query, q) << std::endl;
+    int lower, upper;
+    std::cin >> lower >> upper;
+    std::cout << Find(tree, lower, upper+1, k) << std::endl;
   }
   return 0;
 }
